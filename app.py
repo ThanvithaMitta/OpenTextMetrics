@@ -27,9 +27,9 @@ app.secret_key = 'internal_secret_key'
 
 # --- Configuration ---
 DB_CONFIG = {
-    'dbname': 'OpenTextMetrics3',  # Your DB Name
+    'dbname': 'DB_Name',  # Your DB Name
     'user': 'postgres',   # Your Superuser
-    'password': 'thanvitha', # Your Password
+    'password': 'DB_Password', # Your Password
     'host': 'localhost',
     'port': '5432'
 }
