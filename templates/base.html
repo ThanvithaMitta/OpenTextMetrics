@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenText Metrics</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script> <!-- Helper -->
+</head>
+<body>
+    <div class="container">
+        <nav>
+            <a href="{{ url_for('index') }}" class="nav-brand">OpenText Metrics</a>
+            <ul class="nav-links">
+                <li><a href="{{ url_for('index') }}" class="{{ 'active' if request.endpoint == 'index' else '' }}">Metrics</a></li>
+                <li><a href="{{ url_for('reporting') }}" class="{{ 'active' if request.endpoint == 'reporting' else '' }}">Reporting</a></li>
+                <li><a href="{{ url_for('daily_tracker') }}" class="{{ 'active' if request.endpoint == 'daily_tracker' else '' }}">CSM Effort Tracker</a></li>
+            </ul>
+            <div class="user-info">{{ user.display_name }}</div>
+        </nav>
+
+        {% block content %}{% endblock %}
+    </div>
+
+    <!-- Alert Modal -->
+    <div id="alertModal" class="modal-overlay">
+        <div class="modal-content">
+            <h3 id="alertTitle">Alert</h3>
+            <p id="alertMsg"></p>
+            <div class="modal-footer">
+                <button class="btn btn-primary" onclick="closeAlert()">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <!--Warning Modal-->
+    <div id="warningModal" class="modal-overlay">
+        <div class="modal-content">
+            <h3 id="warningTitle">Warning</h3>
+            <p id="warningMsg"></p>
+            <div class="modal-footer">
+                <button class="btn btn-danger" onclick="closeWarning()">Cancel</button>
+                <button class="btn btn-primary" onclick="proceed()">Ok</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function showAlert(msg, title="Alert") {
+            document.getElementById('alertTitle').innerText = title;
+            document.getElementById('alertMsg').innerText = msg;
+            document.getElementById('alertModal').style.display = 'flex';
+        }
+        function closeAlert() {
+            document.getElementById('alertModal').style.display = 'none';
+        }
+        // Check if page was reloaded (F5 or Refresh Button)
+        if (performance.navigation.type === performance.navigation.TYPE_RELOAD) {
+            sessionStorage.removeItem('metrics_state');
+            sessionStorage.removeItem('reporting_state');
+            console.log("Page reloaded: State cleared.");
+        }
+
+        let warningResolve = null;
+
+        function showWarning(msg, title = "Warning") {
+            document.getElementById('warningTitle').innerText = title;
+            document.getElementById('warningMsg').innerText = msg;
+            document.getElementById('warningModal').style.display = 'flex';
+
+            return new Promise((resolve) => {
+                warningResolve = resolve;
+            });
+        }
+
+        function closeWarning() {
+            document.getElementById('warningModal').style.display = 'none';
+            if (warningResolve) {
+                warningResolve(false); // Cancel
+                warningResolve = null;
+            }
+        }
+
+        function proceed() {
+            document.getElementById('warningModal').style.display = 'none';
+            if (warningResolve) {
+                warningResolve(true); // OK
+                warningResolve = null;
+            }
+        }
+
+    </script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

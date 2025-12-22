@@ -1,0 +1,576 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    /* 1. Input Placeholders (Text Inputs) */
+    input::placeholder, textarea::placeholder {
+        color: #888;
+        font-style: italic;
+        opacity: 1; 
+    }
+
+    /* 2. Custom Dropdown Wrapper */
+    .custom-select-wrapper {
+        position: relative;
+        width: 100%;
+    }
+
+    /* 3. The Input Field */
+    .custom-select-input {
+        width: 100%;
+        padding: 8px 12px;
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+        background-color: #fff;
+        color: #333;
+        font-style: normal;
+        box-sizing: border-box;
+        height: 38px;
+    }
+    
+    .custom-select-input[readonly] {
+        cursor: pointer;
+        background-color: #fff; 
+    }
+
+    .custom-select-input:disabled {
+        background-color: #e9ecef;
+        cursor: not-allowed;
+    }
+
+    /* 4. The Dropdown List */
+    .custom-select-dropdown {
+        display: none;
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        border: 1px solid #ced4da;
+        border-top: none;
+        border-radius: 0 0 4px 4px;
+        background-color: #fff;
+        z-index: 1000;
+        max-height: 200px;
+        overflow-y: auto;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+
+    .custom-select-dropdown.show {
+        display: block;
+    }
+
+    /* 5. Options */
+    .custom-select-option {
+        padding: 8px 12px;
+        cursor: pointer;
+        color: #333;
+        font-style: normal;
+    }
+
+    /* 6. Hover & Active State (Standard Blue) */
+    .custom-select-option:hover, .custom-select-option.active {
+        background-color: #007bff; 
+        color: white;
+    }
+
+    .custom-select-option.disabled {
+        color: #999;
+        cursor: default;
+        background-color: transparent;
+    }
+
+    /* 7. Arrow Icon */
+    .custom-select-arrow {
+        position: absolute;
+        right: 10px;
+        top: 50%;
+        transform: translateY(-50%);
+        pointer-events: none;
+        color: #888;
+        font-size: 12px;
+    }
+</style>
+
+<div class="content-card">
+    <h1>Reporting</h1>
+
+    <!-- 1. View Selection (Radio Buttons) -->
+    <div class="radio-group">
+        <label>
+            <input type="radio" name="rptMode" value="cust" checked onclick="toggleMode()"> 
+            Customer
+        </label>
+        <label>
+            <input type="radio" name="rptMode" value="csm" onclick="toggleMode()"> 
+            CSM
+        </label>
+    </div>
+
+    <!-- 2. Filter Bar (Fixed Layout) -->
+    <div class="filter-grid-4">
+        
+        <!-- Customer Dropdown (Searchable) -->
+        <div id="divCust" class="form-group custom-select-wrapper">
+            <label>Customer</label>
+            <div style="position:relative;">
+                <input type="text" id="custSearch" class="custom-select-input" placeholder="-- Select Customer --" autocomplete="off">
+                <span class="custom-select-arrow">▼</span>
+            </div>
+            <div id="custDropdown" class="custom-select-dropdown"></div>
+            <input type="hidden" id="rptShortCode">
+        </div>
+
+        <!-- CSM Dropdown (Searchable) -->
+        <div id="divCsm" class="form-group custom-select-wrapper hidden">
+            <label>CSM</label>
+            <div style="position:relative;">
+                <input type="text" id="csmSearch" class="custom-select-input" placeholder="-- Select CSM --" autocomplete="off">
+                <span class="custom-select-arrow">▼</span>
+            </div>
+            <div id="csmDropdown" class="custom-select-dropdown"></div>
+            <input type="hidden" id="rptCsmSelect">
+        </div>
+
+        <!-- Month Dropdown (Read-only / Clickable) -->
+        <div class="form-group custom-select-wrapper">
+            <label>Month</label>
+            <div style="position:relative;">
+                <input type="text" id="monthDisplay" class="custom-select-input" placeholder="Select Customer/CSM First" readonly>
+                <span class="custom-select-arrow">▼</span>
+            </div>
+            <div id="monthDropdown" class="custom-select-dropdown"></div>
+            <input type="hidden" id="rptMonth">
+        </div>
+
+        <!-- Previous Months (Custom Range) -->
+        <div class="form-group">
+            <label>Previous Months</label>
+            <div id="rptRangeContainer">
+                <select id="rptRangeSelect" class="form-control">
+                    <option value="1">1</option>
+                    <option value="3">3</option>
+                    <option value="6" selected>6</option>
+                    <option value="custom">Custom</option>
+                </select>
+                <input type="number" id="rptRangeInput" class="form-control" style="display:none;" placeholder="Enter no. of months" min="1" max="60">
+            </div>
+        </div>
+
+        <!-- Load Button -->
+        <div class="form-group">
+            <button class="btn btn-primary" onclick="loadReport()" style="height: 38px; width: 100%;">Load</button>
+        </div>
+    </div>
+
+    <!-- 3. Historical Data Table -->
+    <div id="reportSection" class="hidden">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:30px; margin-bottom:10px;">
+            <h2 style="margin:0; font-size: 20px; color: #003C71;">Historical Data</h2>
+            <button class="btn btn-primary" onclick="downloadCSV()">Download CSV</button>
+        </div>
+
+        <div class="report-table-container">
+            <div class="table-scroll">
+                <table id="reportTable" class="report-table">
+                    <thead></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. Manage Records Section (Inline Version) -->
+    <div class="admin-section">
+        <h2 style="color:#003C71;">Manage Records</h2>
+        <div class="admin-buttons">
+            <button class="btn btn-primary" onclick="toggleInsertPanel()">Add New Customer</button>
+            <button class="btn btn-primary" onclick="toggleAuditPanel()">Audit Records</button>
+        </div>
+
+        <!-- INLINE INSERT PANEL -->
+        <div id="insertPanel" style="display:none; background:#f9fbfd; padding:25px; border-radius:8px; border:1px solid #e0e0e0; margin-bottom:30px; margin-top:20px;">
+            <h3 style="color:#003C71; margin-bottom:20px;">Insert New Record</h3>
+            <div style="background:white; padding:20px; border-radius:8px; border:1px solid #ddd;">
+                <h4 style="color:#003C71; border-bottom:2px solid #003C71; padding-bottom:10px; margin-bottom:20px;">Primary Configuration</h4>
+                <div style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 20px; margin-bottom: 15px;">
+                    <div class="form-group"><label>Customer Short Code <span style="color: red">*</span></label><input type="text" id="new_sc" class="form-control"></div>
+                    <div class="form-group"><label>Go Live <span style="color: red">*</span></label><input type="date" id="new_golive" class="form-control"></div>
+                    <div class="form-group"><label>CSM Primary</label><input type="text" id="new_prim" class="form-control"></div>
+                    <div class="form-group"><label>CSM Lead</label><input type="text" id="new_lead" class="form-control"></div>
+                    <div class="form-group"><label>No of Months</label><input type="number" id="new_mon" value="6" class="form-control"></div>
+                    <div class="form-group"><label>No of Environments</label><select id="new_env" class="form-control"><option value="2">2</option><option value="3">3</option></select></div>
+                </div>
+                <div style="margin-top: 20px;"><button class="btn btn-success" onclick="saveNewCustomer()">Save Configuration</button></div>
+            </div>
+        </div>
+
+        <!-- INLINE AUDIT PANEL -->
+        <div id="auditPanel" style="display:none; margin-top:20px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                <div><h3 style="color:#003C71; margin:0;">Audit Records</h3><p style="font-size:13px; color:#666; margin:5px 0 0 0;">Showing latest 10 records</p></div>
+                <button class="btn btn-primary" onclick="downloadAuditCsv()">Download CSV</button>
+            </div>
+            <div class="report-table-container">
+                <div class="table-scroll">
+                    <table id="auditTable" class="report-table">
+                        <thead><tr><th>Audit ID</th><th>Table Name</th><th>Operation</th><th>Changed At</th><th>System Name</th><th>User Name</th><th>Old Data</th><th>New Data</th><th>Primary Key</th><th>Comment</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+let customers = [];
+let csmList = [];
+
+// --- KEYBOARD NAVIGATION HELPER ---
+function attachKeyboardNav(inputId, dropdownId) {
+    const input = $('#' + inputId);
+    const dropdown = $('#' + dropdownId);
+    
+    input.on('keydown', function(e) {
+        // For Readonly inputs (Month), open on ArrowDown if closed
+        if (input.prop('readonly') && !dropdown.hasClass('show') && (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ')) {
+            e.preventDefault();
+            dropdown.addClass('show');
+            return;
+        }
+
+        if (!dropdown.hasClass('show')) return;
+
+        const items = dropdown.find('.custom-select-option:not(.disabled)');
+        if (items.length === 0) return;
+        
+        let current = dropdown.find('.custom-select-option.active');
+        let index = items.index(current);
+        
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            index++;
+            if (index >= items.length) index = 0;
+            items.removeClass('active');
+            $(items[index]).addClass('active')[0].scrollIntoView({block: 'nearest'});
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            index--;
+            if (index < 0) index = items.length - 1;
+            items.removeClass('active');
+            $(items[index]).addClass('active')[0].scrollIntoView({block: 'nearest'});
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (index > -1) $(items[index]).trigger('mousedown');
+        } else if (e.key === 'Escape') {
+            dropdown.removeClass('show');
+        }
+    });
+}
+
+// 1. Customer Search
+$('#custSearch').on('click input', function (e) {
+    e.stopPropagation();
+    const val = $(this).val().toLowerCase();
+    
+    if ($(this).val().trim() === "") {
+        $('#rptShortCode').val('');
+        resetMonthDropdown();
+        $('#reportSection').addClass('hidden');
+    }
+
+    const dd = $('#custDropdown');
+    dd.empty();
+
+    const filtered = customers.filter(c => c.display.toLowerCase().includes(val));
+
+    if (!filtered.length) {
+        dd.append('<div class="custom-select-option disabled">No results</div>');
+    } else {
+        filtered.forEach(c => {
+            dd.append(`<div class="custom-select-option cust-opt" data-code="${c.short_code}" data-display="${c.display}">${c.display}</div>`);
+        });
+    }
+    $('.custom-select-dropdown').not(dd).removeClass('show');
+    dd.addClass('show');
+});
+
+// 2. CSM Search
+$('#csmSearch').on('click input', function (e) {
+    e.stopPropagation();
+    const val = $(this).val().toLowerCase();
+    
+    if ($(this).val().trim() === "") {
+        $('#rptCsmSelect').val('');
+        resetMonthDropdown();
+        $('#reportSection').addClass('hidden');
+    }
+
+    const dd = $('#csmDropdown');
+    dd.empty();
+
+    const filtered = csmList.filter(c => c.toLowerCase().includes(val));
+
+    if (!filtered.length) {
+        dd.append('<div class="custom-select-option disabled">No results</div>');
+    } else {
+        filtered.forEach(c => {
+            dd.append(`<div class="custom-select-option csm-opt" data-val="${c}">${c}</div>`);
+        });
+    }
+    $('.custom-select-dropdown').not(dd).removeClass('show');
+    dd.addClass('show');
+});
+
+// 3. Month Dropdown
+$('#monthDisplay').on('click', function(e) {
+    e.stopPropagation();
+    if ($(this).attr('placeholder').includes('First')) return;
+    const dd = $('#monthDropdown');
+    $('.custom-select-dropdown').not(dd).removeClass('show');
+    dd.toggleClass('show');
+});
+
+// --- OPTION CLICK HANDLERS ---
+$(document).on('mousedown', '.cust-opt', function (e) {
+    e.preventDefault(); e.stopPropagation();
+    const code = $(this).data('code');
+    const display = $(this).data('display');
+    $('#custSearch').val(display);
+    $('#rptShortCode').val(code);
+    $('#custDropdown').removeClass('show');
+    loadMonths(code, null);
+});
+
+$(document).on('mousedown', '.csm-opt', function (e) {
+    e.preventDefault(); e.stopPropagation();
+    const val = $(this).data('val');
+    $('#csmSearch').val(val);
+    $('#rptCsmSelect').val(val);
+    $('#csmDropdown').removeClass('show');
+    loadMonths(null, val);
+});
+
+$(document).on('mousedown', '.month-opt', function (e) {
+    e.preventDefault(); e.stopPropagation();
+    const val = $(this).data('val');
+    const disp = $(this).data('disp');
+    $('#monthDisplay').val(disp);
+    $('#rptMonth').val(val);
+    $('#monthDropdown').removeClass('show');
+});
+
+
+$(document).ready(function() {
+    if (performance.navigation.type === 1 || (window.performance.getEntriesByType && window.performance.getEntriesByType("navigation")[0] && window.performance.getEntriesByType("navigation")[0].type === 'reload')) {
+        sessionStorage.removeItem('rpt_mode');
+        sessionStorage.removeItem('rpt_month');
+        sessionStorage.removeItem('rpt_range');
+        sessionStorage.removeItem('rpt_short_code');
+        sessionStorage.removeItem('rpt_cust_display');
+        sessionStorage.removeItem('rpt_csm');
+    }
+ 
+    $.get('/api/customers', function(data) { customers = data; });
+    $.get('/api/reporting/csm_list', function(data) {
+        csmList = data; 
+        restoreReportingState();
+    });
+ 
+    $('#rptRangeSelect').change(function() {
+        if ($(this).val() === 'custom') { $(this).hide(); $('#rptRangeInput').show().val('').focus(); }
+    });
+
+    $('#rptRangeInput').blur(function() {
+        if ($(this).val() === '') { $(this).hide(); $('#rptRangeSelect').val('6').show(); }
+    });
+
+    // Attach Keyboard Nav
+    attachKeyboardNav('custSearch', 'custDropdown');
+    attachKeyboardNav('csmSearch', 'csmDropdown');
+    attachKeyboardNav('monthDisplay', 'monthDropdown');
+
+    restoreReportingState();
+
+    $(document).on('click', function (e) {
+        if (!$(e.target).closest('.custom-select-wrapper').length) {
+            $('.custom-select-dropdown').removeClass('show');
+        }
+    });
+});
+
+function resetMonthDropdown() {
+    $('#rptMonth').val('');
+    $('#monthDisplay').val('').attr('placeholder', 'Select Customer/CSM First').prop('disabled', true);
+    $('#monthDropdown').empty();
+}
+
+function restoreReportingState() {
+    const saved = sessionStorage.getItem('reporting_state');
+    if (!saved) return;
+    const state = JSON.parse(saved);
+    
+    $(`input[name="rptMode"][value="${state.mode}"]`).prop('checked', true);
+    toggleMode(); 
+
+    if (state.mode === 'cust') {
+        $('#custSearch').val(state.customerDisplay);
+        $('#rptShortCode').val(state.customer);
+        loadMonths(state.customer, null, function() { restoreMonthDisplay(state.month); });
+    } else {
+        $('#csmSearch').val(state.csm);
+        $('#rptCsmSelect').val(state.csm);
+        loadMonths(null, state.csm, function() { restoreMonthDisplay(state.month); });
+    }
+
+    if (state.range === 'custom' || ![1,3,6].includes(parseInt(state.range))) {
+        $('#rptRangeSelect').val('custom').change(); $('#rptRangeInput').val(state.range);
+    } else {
+        $('#rptRangeSelect').val(state.range);
+    }
+
+    setTimeout(() => { $('#rptMonth').val(state.month); renderReportTable(state.data); }, 500);
+}
+
+function restoreMonthDisplay(monthVal) {
+    const opt = $(`#monthDropdown .month-opt[data-val="${monthVal}"]`);
+    if(opt.length) { $('#monthDisplay').val(opt.text()); $('#rptMonth').val(monthVal); }
+}
+
+function toggleMode() {
+    const mode = $('input[name="rptMode"]:checked').val();
+    if(mode === 'cust') {
+        $('#divCust').removeClass('hidden'); $('#divCsm').addClass('hidden');
+        $('#custSearch').val(''); $('#rptShortCode').val('');
+    } else {
+        $('#divCust').addClass('hidden'); $('#divCsm').removeClass('hidden');
+        $('#csmSearch').val(''); $('#rptCsmSelect').val('');
+    }
+    resetMonthDropdown();
+    $('#reportSection').addClass('hidden');
+}
+
+function loadMonths(sc, csm, callback) {
+    let url = '/api/reporting/months?';
+    if(sc) url += 'short_code=' + sc; else if(csm) url += 'csm=' + csm; else return;
+ 
+    const dd = $('#monthDropdown');
+    const disp = $('#monthDisplay');
+    disp.attr('placeholder', 'Loading...').val('');
+ 
+    $.get(url, function(data) {
+        dd.empty();
+        if(data.length === 0) {
+            disp.attr('placeholder', 'No data available');
+            dd.append('<div class="custom-select-option disabled">No data available</div>');
+        } else {
+            disp.attr('placeholder', '-- Select Month --');
+            data.forEach(m => {
+                dd.append(`<div class="custom-select-option month-opt" data-val="${m.value}" data-disp="${m.display}">${m.display}</div>`);
+            });
+            disp.prop('disabled', false);
+        }
+        $('#rptMonth').val("");
+        if (callback) callback();
+    });
+}
+
+function getSelectedRange() {
+    return ($('#rptRangeInput').is(':visible') && $('#rptRangeInput').val()) ? $('#rptRangeInput').val() : $('#rptRangeSelect').val();
+}
+
+function loadReport() {
+    const mode = $('input[name="rptMode"]:checked').val();
+    const rangeVal = getSelectedRange();
+    const month = $('#rptMonth').val();
+   
+    if (!rangeVal) { showAlert("Please specify previous months."); return; }
+ 
+    const data = { month: month, range: rangeVal };
+    if(mode === 'cust') data.short_code = $('#rptShortCode').val();
+    else data.csm = $('#rptCsmSelect').val();
+ 
+    if (mode === 'cust' && !data.short_code) { showAlert("Please select a Customer."); return; }
+    if (mode === 'csm' && !data.csm) { showAlert("Please select a CSM."); return; }
+    if (!data.month) { showAlert("Please select a Month."); return; }
+ 
+    sessionStorage.setItem('rpt_mode', mode);
+    sessionStorage.setItem('rpt_month', month);
+    sessionStorage.setItem('rpt_range', rangeVal);
+   
+    if(mode === 'cust') {
+        sessionStorage.setItem('rpt_short_code', data.short_code);
+        sessionStorage.setItem('rpt_cust_display', $('#custSearch').val());
+    } else {
+        sessionStorage.setItem('rpt_csm', data.csm);
+    }
+    sessionStorage.setItem('reporting_state', JSON.stringify({
+        mode: mode, customer: data.short_code, customerDisplay: $('#custSearch').val(),
+        csm: data.csm, month: month, range: rangeVal, data: [] 
+    }));
+ 
+    $.post('/load_report_data', data, function(res) {
+        if(!res.success) { showAlert("Error loading report"); return; }
+        // Update session with data for reload
+        const currentSession = JSON.parse(sessionStorage.getItem('reporting_state'));
+        currentSession.data = res.data;
+        sessionStorage.setItem('reporting_state', JSON.stringify(currentSession));
+        renderReportTable(res.data);
+    });
+}
+
+function renderReportTable(rows) {
+    $('#reportSection').removeClass('hidden');
+    const thead = $('#reportTable thead'); const tbody = $('#reportTable tbody');
+    thead.empty(); tbody.empty();
+    if (rows.length === 0) { tbody.append('<tr><td colspan="10" style="text-align:center;">No Data Found</td></tr>'); return; }
+    const desiredOrder = ["Customer Name", "Month & Year", "CSM Primary", "CSM Lead", "Availability (%)", "Target (%)", "Prod Limit", "Prod Used", "Test Limit", "Test Used", "Dev Limit", "Dev Used", "Prod Target GB", "Prod Actual GB", "Test Target GB", "Test Actual GB", "Dev Target GB", "Dev Actual GB", "Opened Tickets", "Closed Tickets", "Current Backlog Tickets", "Tickets Backlog"];
+    const availableKeys = Object.keys(rows[0]);
+    const finalColumns = desiredOrder.filter(col => availableKeys.includes(col));
+    let hRow = '<tr>'; finalColumns.forEach(k => { hRow += `<th>${k}</th>`; }); thead.append(hRow + '</tr>');
+    rows.forEach(r => {
+        let bRow = '<tr>'; finalColumns.forEach(k => { let val = r[k] === null || r[k] === undefined ? '' : r[k]; bRow += `<td>${val}</td>`; }); tbody.append(bRow + '</tr>');
+    });
+}
+
+function downloadCSV() {
+    const mode = $('input[name="rptMode"]:checked').val();
+    const rangeVal = getSelectedRange();
+    let form = $('<form action="/download_report_csv" method="post"></form>');
+    form.append(`<input name="month" value="${$('#rptMonth').val()}">`);
+    form.append(`<input name="range" value="${rangeVal}">`);
+    if(mode === 'cust') form.append(`<input name="short_code" value="${$('#rptShortCode').val()}">`);
+    else form.append(`<input name="csm" value="${$('#rptCsmSelect').val()}">`);
+    $('body').append(form); form.submit(); form.remove();
+}
+
+function toggleInsertPanel() { $('#auditPanel').hide(); $('#insertPanel').slideToggle(); }
+function toggleAuditPanel() { $('#insertPanel').hide(); if ($('#auditPanel').is(':visible')) { $('#auditPanel').slideUp(); } else { loadAuditData(); $('#auditPanel').slideDown(); } }
+
+function saveNewCustomer() {
+    if(!$('#new_sc').val() || !$('#new_golive').val()) { showAlert("Required fields missing."); return; }
+    $.post('/add_customer', {
+        short_code: $('#new_sc').val(), go_live_date: $('#new_golive').val(),
+        csm_primary: $('#new_prim').val(), csm_lead: $('#new_lead').val(),
+        no_of_months: $('#new_mon').val(), no_of_environments: $('#new_env').val()
+    }, function(res) {
+        if(res.success) { showAlert("Customer Added Successfully"); $('#new_sc').val(''); $('#new_golive').val(''); $('#insertPanel').slideUp(); $.get('/api/customers', function(data) { customers = data; }); } else { showAlert(res.message); }
+    });
+}
+
+function loadAuditData() {
+    $.get('/api/audits', function(rows) {
+        const tb = $('#auditTable tbody'); tb.empty();
+        if (!rows || rows.length === 0) { tb.append('<tr><td colspan="9" style="text-align:center">No records found</td></tr>'); return; }
+        rows.forEach(r => {
+            const formatData = (data) => { if (!data) return '-'; try { return JSON.stringify(data); } catch (e) { return data; } };
+            tb.append(`<tr><td>${r.audit_id || ''}</td><td>${r.table_name || ''}</td><td>${r.operation_type || ''}</td><td style="white-space:nowrap;">${r.changed_at || ''}</td><td>${r.system_name || ''}</td><td>${r.username || ''}</td><td><div class="audit-wrap-box">${formatData(r.old_data)}</div></td><td><div class="audit-wrap-box">${formatData(r.new_data)}</div></td><td>${formatData(r.primary_key_value)}</td><td><div class="audit-wrap-box">${r.comments || ''}</div></td></tr>`);
+        });
+    });
+}
+function downloadAuditCsv() { window.location.href = '/download_audits'; }
+</script>
+{% endblock %}

@@ -1,0 +1,1275 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    /* 1. Input Placeholders */
+    input::placeholder, textarea::placeholder {
+        color: #888;
+        font-style: italic;
+        opacity: 1;
+    }
+
+    /* 2. Custom Dropdown Wrapper */
+    .custom-select-wrapper {
+        position: relative;
+        width: 100%;
+    }
+
+    /* 3. The Input Field */
+    .custom-select-input {
+        width: 100%;
+        padding: 8px 12px;
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+        background-color: #fff;
+        color: #333;
+        font-style: normal;
+        box-sizing: border-box;
+        height: 38px;
+    }
+    
+    .custom-select-input[readonly] {
+        cursor: pointer;
+        background-color: #fff;
+    }
+
+    .custom-select-input:disabled {
+        background-color: #e9ecef;
+        cursor: not-allowed;
+    }
+
+    /* 4. The Dropdown List */
+    .custom-select-dropdown {
+        display: none;
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        border: 1px solid #ced4da;
+        border-top: none;
+        border-radius: 0 0 4px 4px;
+        background-color: #fff;
+        z-index: 1000;
+        max-height: 200px;
+        overflow-y: auto;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+
+    .custom-select-dropdown.show {
+        display: block;
+    }
+
+    /* 5. Options */
+    .custom-select-option {
+        padding: 8px 12px;
+        cursor: pointer;
+        color: #333;
+        font-style: normal;
+    }
+
+    /* 6. Hover & Active State (Blue) */
+    .custom-select-option:hover, .custom-select-option.active {
+        background-color: #007bff;
+        color: white;
+    }
+
+    .custom-select-option.disabled {
+        color: #999;
+        cursor: default;
+        background-color: transparent;
+    }
+
+    /* 7. Arrow Icon */
+    .custom-select-arrow {
+        position: absolute;
+        right: 10px;
+        top: 50%;
+        transform: translateY(-50%);
+        pointer-events: none;
+        color: #888;
+        font-size: 12px;
+    }
+</style>
+
+<div class="content-card">
+    <!-- Page Title -->
+    <h1 style="color: #003C71; margin-bottom: 20px; border-bottom: 3px solid #00D1FF; padding-bottom: 10px;">Metrics Dashboard</h1>
+
+    <!-- 1. Selection Form -->
+    <form method="POST" id="loadForm">
+        <div class="filter-grid">
+            
+            <!-- Customer Searchable Dropdown -->
+            <div class="form-group custom-select-wrapper">
+                <label>Customer</label>
+                <div style="position:relative;">
+                    <input type="text" 
+                           id="custSearch" 
+                           class="custom-select-input"
+                           placeholder="-- Select Customer --"
+                           autocomplete="off"
+                           value="{{ selected_customer_display|default('') }}">
+                    <span class="custom-select-arrow">▼</span>
+                </div>
+                
+                <div id="custDropdown" class="custom-select-dropdown"></div>
+                
+                <input type="hidden" name="customer" id="customer" value="{{ selected_customer|default('') }}">
+                <input type="hidden" id="selectedShortCode" value="{{ selected_customer|default('') }}">
+            </div>
+            
+            <!-- Month Dropdown (Read-only / Clickable) -->
+            <div class="form-group custom-select-wrapper">
+                <label>Month</label>
+                <div style="position:relative;">
+                    <input type="text" id="monthDisplay" class="custom-select-input" placeholder="Select Customer First" readonly>
+                    <span class="custom-select-arrow">▼</span>
+                </div>
+                <div id="monthDropdown" class="custom-select-dropdown"></div>
+                <input type="hidden" name="month" id="monthSelect">
+            </div>
+            
+            <!-- Load Button -->
+            <button type="button" id="btnLoad" class="btn btn-primary" style="height: 38px;">Load</button>
+        </div>
+    </form>
+
+    <!-- 2. Dashboard Header -->
+    <h2 id="dashboardTitle" style="color: #003C71; margin: 25px 0; font-size: 24px; font-weight: bold; display:none;"></h2>
+
+    <!-- 3. Metrics Grid (4 Columns) -->
+    <div id="metricsGrid" class="metrics-four-grid" style="display:none;">
+        <!-- Availability Card -->
+        <div class="metrics-section" id="card-availability">
+            <div class="section-header">
+                <h2>Availability</h2>
+                <button class="btn btn-primary btn-edit" onclick="toggleEdit('availability')">Edit</button>
+                <div class="edit-actions" style="display:none;">
+                    <button class="btn btn-danger" onclick="cancelEdit('availability')">Cancel</button>
+                    <button class="btn btn-success" onclick="saveData('availability')">Save</button>
+                </div>
+            </div>
+            <table>
+                <thead><tr><th>Metric</th><th>Value</th></tr></thead>
+                <tbody>
+                    <tr>
+                        <td>Availability</td>
+                        <td>
+                            <span class="view-mode" id="view_avail"></span>
+                            <div class="inline-editor"><input type="number" step="0.01" class="form-control" id="inp_avail"></div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>Target</td>
+                        <td>
+                            <span class="view-mode" id="view_target"></span>
+                            <div class="inline-editor"><input type="number" step="0.01" class="form-control" id="inp_target"></div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Users Card -->
+        <div class="metrics-section" id="card-users">
+            <div class="section-header">
+                <h2>Users</h2>
+                <button class="btn btn-primary btn-edit" onclick="toggleEdit('users')">Edit</button>
+                <div class="edit-actions" style="display:none;">
+                    <button class="btn btn-danger" onclick="cancelEdit('users')">Cancel</button>
+                    <button class="btn btn-success" onclick="saveData('users')">Save</button>
+                </div>
+            </div>
+            <table>
+                <thead><tr><th></th><th>Entitlement</th><th>Consumed</th></tr></thead>
+                <tbody>
+                    <tr>
+                        <td>Prod</td>
+                        <td><span class="view-mode" id="view_pl"></span><input type="number" class="inline-editor form-control" id="inp_pl"></td>
+                        <td><span class="view-mode" id="view_pu"></span><input type="number" class="inline-editor form-control" id="inp_pu"></td>
+                    </tr>
+                    <tr>
+                        <td>Test</td>
+                        <td><span class="view-mode" id="view_tl"></span><input type="number" class="inline-editor form-control" id="inp_tl"></td>
+                        <td><span class="view-mode" id="view_tu"></span><input type="number" class="inline-editor form-control" id="inp_tu"></td>
+                    </tr>
+                    <tr class="dev-row" style="display:none;">
+                        <td>Dev</td>
+                        <td><span class="view-mode" id="view_dl"></span><input type="number" class="inline-editor form-control" id="inp_dl"></td>
+                        <td><span class="view-mode" id="view_du"></span><input type="number" class="inline-editor form-control" id="inp_du"></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Storage Card -->
+        <div class="metrics-section" id="card-storage">
+            <div class="section-header">
+                <h2>Storage</h2>
+                <button class="btn btn-primary btn-edit" onclick="toggleEdit('storage')">Edit</button>
+                <div class="edit-actions" style="display:none;">
+                    <button class="btn btn-danger" onclick="cancelEdit('storage')">Cancel</button>
+                    <button class="btn btn-success" onclick="saveData('storage')">Save</button>
+                </div>
+            </div>
+            <table>
+                <thead><tr><th></th><th>Target (GB)</th><th>Actual (GB)</th></tr></thead>
+                <tbody>
+                    <tr>
+                        <td>Prod</td>
+                        <td><span class="view-mode" id="view_spt"></span><input type="number" step="0.01" class="inline-editor form-control" id="inp_spt"></td>
+                        <td><span class="view-mode" id="view_spa"></span><input type="number" step="0.01" class="inline-editor form-control" id="inp_spa"></td>
+                    </tr>
+                    <tr>
+                        <td>Test</td>
+                        <td><span class="view-mode" id="view_stt"></span><input type="number" step="0.01" class="inline-editor form-control" id="inp_stt"></td>
+                        <td><span class="view-mode" id="view_sta"></span><input type="number" step="0.01" class="inline-editor form-control" id="inp_sta"></td>
+                    </tr>
+                    <tr class="dev-row" style="display:none;">
+                        <td>Dev</td>
+                        <td><span class="view-mode" id="view_sdt"></span><input type="number" step="0.01" class="inline-editor form-control" id="inp_sdt"></td>
+                        <td><span class="view-mode" id="view_sda"></span><input type="number" step="0.01" class="inline-editor form-control" id="inp_sda"></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Tickets Card -->
+        <div class="metrics-section" id="card-tickets">
+            <div class="section-header">
+                <h2>Tickets</h2>
+                <button class="btn btn-primary btn-edit" onclick="toggleEdit('tickets')">Edit</button>
+                <div class="edit-actions" style="display:none;">
+                    <button class="btn btn-danger" onclick="cancelEdit('tickets')">Cancel</button>
+                    <button class="btn btn-success" onclick="saveData('tickets')">Save</button>
+                </div>
+            </div>
+            <table>
+                <tbody>
+                    <tr><td>Opened</td><td><span class="view-mode" id="view_to"></span><div class="inline-editor"><input type="number" class="form-control" id="inp_to"></div></td></tr>
+                    <tr><td>Closed</td><td><span class="view-mode" id="view_tc"></span><div class="inline-editor"><input type="number" class="form-control" id="inp_tc"></div></td></tr>
+                    <tr><td>Backlog</td><td><span class="view-mode" id="view_tb"></span><div class="inline-editor"><input type="number" class="form-control" id="inp_tb"></div></td></tr>
+                    <tr><td>Overall Backlog</td><td><span class="view-mode" id="view_tob"></span><div class="inline-editor"><input type="number" class="form-control" id="inp_tob"></div></td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 4. Global Comment Box (Hidden until Edit is clicked) -->
+    <div id="globalCommentWrapper" class="comments-panel" style="display:none;">
+        <div class="comments-header">
+            <h4>Comments</h4>
+            <button class="btn btn-success" id="btnSave" onclick="performSave()" disabled>Save Changes</button>
+        </div>
+        <div>
+            <textarea id="globalComment" class="form-control" rows="2" placeholder="Enter the reason for editing this section..." style="width:100%; border:1px solid #ccc; border-radius:4px; padding:10px;"></textarea>
+        </div>
+    </div>
+
+    <!-- Configuration Section (Hidden initially) -->
+    <div id="configSection" style="display:none;">
+        <div class="section-header" style="border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 20px;">
+            <h3 style="margin:0; color:#003C71; font-size:18px;">Basic Configuration</h3>
+            <!-- Toggle Buttons -->
+            <button id="btnConfigEdit" class="btn btn-primary" onclick="toggleConfigEditMode()">Edit</button>
+            <button id="btnConfigCancel" class="btn btn-danger" onclick="cancelConfigEdit()" style="display:none;">Cancel</button>
+        </div>
+        
+        <!-- VIEW MODE GRID (Visible by default) -->
+        <div id="configViewMode" class="metrics-six-grid">
+            <div class="config-card-view">
+                <span class="config-label">Customer Full Name</span>
+                <span class="config-value" id="view_conf_fullname"></span>
+            </div>
+            <div class="config-card-view">
+                <span class="config-label">CSM Primary</span>
+                <span class="config-value" id="view_conf_prim"></span>
+            </div>
+            <div class="config-card-view">
+                <span class="config-label">CSM Lead</span>
+                <span class="config-value" id="view_conf_lead"></span>
+            </div>
+            <div class="config-card-view">
+                <span class="config-label">Customer UID</span>
+                <span class="config-value" id="view_conf_uid"></span>
+            </div>
+            <div class="config-card-view">
+                <span class="config-label">No. of Environments</span>
+                <span class="config-value" id="view_conf_envs"></span>
+            </div>
+            <div class="config-card-view">
+                <span class="config-label">No. of Months</span>
+                <span class="config-value" id="view_conf_months"></span>
+            </div>
+        </div>
+        
+        <!-- EDIT MODE GRID (Hidden by default) -->
+        <div id="configEditMode" class="metrics-six-grid" style="display:none;">
+            <div class="form-group">
+                <label>Customer Full Name</label>
+                <input type="text" id="conf_fullname" class="form-control">
+            </div>
+            <div class="form-group">
+                <label>CSM Primary</label>
+                <input type="text" id="conf_prim" class="form-control">
+            </div>
+            <div class="form-group">
+                <label>CSM Lead</label>
+                <input type="text" id="conf_lead" class="form-control">
+            </div>
+            <div class="form-group">
+                <label>Customer UID</label>
+                <input type="text" id="conf_uid" class="form-control">
+            </div>
+            <div class="form-group">
+                <label>No. of Environments</label>
+                <select id="conf_envs" class="form-control">
+                    <option value="2">2</option>
+                    <option value="3">3</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>No. of Months</label>
+                <input type="number" id="conf_months" class="form-control">
+            </div>
+        </div>
+
+        <!-- Notes Section (View vs Edit) -->
+        <div style="margin-top: 20px;">
+            <label class="config-label">Customer Notes</label>
+            
+            <!-- View Note -->
+            <div id="view_note_container" class="notes-view-box">
+                <span id="view_conf_note">None</span>
+            </div>
+
+            <!-- Edit Note -->
+            <div id="edit_note_container" style="display:none;">
+                <textarea id="conf_note" class="form-control" rows="3" maxlength=""125></textarea>
+                <div id="conf_note_count" style="text-align:right; font-size: 11px; color:#999;">0 / 125</div>
+                <div style="text-align:right; font-size:11px; color:#999;">max chars</div>
+            </div>
+        </div>
+
+        <!-- Comment & Save (Only for Edit Mode) -->
+        <div id="configFooter" style="display:none; margin-top: 25px; padding-top: 20px; border-top: 1px solid #eee;">
+            <div class="form-group">
+                <label style="color:#003C71;">Comment (Required)</label>
+                <textarea id="conf_comment" class="form-control" rows="2" placeholder="Enter reason for update..."></textarea>
+            </div>
+            <div style="text-align: right; margin-top: 15px;">
+                <button class="btn btn-success" id="btnConfigSave" onclick="saveConfig()" disabled>Save Configuration</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bottom Action Bar (Hidden initially) -->
+    <div id="bottomBar" style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee; display: none; justify-content: space-between; align-items: center;">
+        <button class="btn btn-primary" onclick="generatePPT()">Generate PowerPoint</button>
+        <button class="btn btn-primary" onclick="toggleConfig()">▲ Customer Configuration</button>
+    </div>
+</div>
+
+<!-- ALERT MODAL -->
+<div id="alertModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:100000; align-items:center; justify-content:center;">
+  <div style="background:#fff; width:420px; border-radius:12px; padding:24px;">
+    <h3>Alert</h3>
+    <div id="alertMsg" style="margin-top:10px; padding:10px 0; font-size:14px;"></div>
+    <div style="text-align:right; margin-top:20px;">
+      <button id="alertOk" class="btn btn-primary">OK</button>
+    </div>
+  </div>
+</div>
+
+<!-- CONFIRM MODAL -->
+<div id="confirmModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:100000; align-items:center; justify-content:center;">
+  <div style="background:#fff; width:420px; border-radius:12px; padding:24px;">
+    <h3>Confirm</h3>
+    <div id="confirmMsg"></div>
+    <div style="text-align:right; margin-top:20px;">
+      <button id="confirmCancel" class="btn btn-danger">Cancel</button>
+      <button id="confirmOk" class="btn btn-primary">OK</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<!-- Javascript -->
+<script>
+    let customers = [];
+    let currentShortCode = "";
+    let currentMonthValue = "";
+    
+    // --- HELPER: CUSTOM ALERTS & CONFIRMS ---
+    function showAlert(msg) {
+        $('#alertMsg').text(msg);
+        $('#alertModal').css('display', 'flex');
+    }
+    $('#alertOk').on('click', function() {
+        $('#alertModal').hide();
+    });
+
+    function showWarning(msg) {
+        return new Promise((resolve) => {
+            $('#confirmMsg').text(msg);
+            $('#confirmModal').css('display', 'flex');
+            
+            // Unbind previous clicks to avoid multiple fires
+            $('#confirmOk').off('click').on('click', function() {
+                $('#confirmModal').hide();
+                resolve(true);
+            });
+            $('#confirmCancel').off('click').on('click', function() {
+                $('#confirmModal').hide();
+                resolve(false);
+            });
+        });
+    }
+
+    // --- KEYBOARD NAVIGATION HELPER ---
+    function attachKeyboardNav(inputId, dropdownId) {
+        const input = $('#' + inputId);
+        const dropdown = $('#' + dropdownId);
+        
+        input.on('keydown', function(e) {
+            // For Readonly inputs (Month), open on ArrowDown if closed
+            if (input.prop('readonly') && !dropdown.hasClass('show') && (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ')) {
+                e.preventDefault();
+                dropdown.addClass('show');
+                return;
+            }
+
+            if (!dropdown.hasClass('show')) return;
+
+            const items = dropdown.find('.custom-select-option:not(.disabled)');
+            if (items.length === 0) return;
+            
+            let current = dropdown.find('.custom-select-option.active');
+            let index = items.index(current);
+            
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                index++;
+                if (index >= items.length) index = 0;
+                items.removeClass('active');
+                $(items[index]).addClass('active')[0].scrollIntoView({block: 'nearest'});
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                index--;
+                if (index < 0) index = items.length - 1;
+                items.removeClass('active');
+                $(items[index]).addClass('active')[0].scrollIntoView({block: 'nearest'});
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                if (index > -1) $(items[index]).trigger('mousedown');
+            } else if (e.key === 'Escape') {
+                dropdown.removeClass('show');
+            }
+        });
+    }
+
+    $(document).ready(function() {
+
+        const confNote = document.getElementById('conf_note');
+        const confNoteCount = document.getElementById('conf_note_count');
+
+        if (confNote && confNoteCount) {
+            confNote.addEventListener('input', function () {
+                const len = confNote.value.length;
+
+                confNoteCount.textContent = `${len} / 125`;
+
+                if (len > 125) {
+                    confNoteCount.style.color = '#dc3545'; // red
+                } else {
+                    confNoteCount.style.color = '#999';
+                }
+            });
+        }
+
+
+        // A. Fetch Customers
+        if (performance.navigation.type === 1 || (window.performance.getEntriesByType && window.performance.getEntriesByType("navigation")[0] && window.performance.getEntriesByType("navigation")[0].type === 'reload')) {
+            console.log("Page was refreshed - Clearing state.");
+            sessionStorage.removeItem('metrics_short_code');
+            sessionStorage.removeItem('metrics_cust_display');
+            sessionStorage.removeItem('metrics_month');
+        }
+ 
+        // 2. Fetch Customers
+        $.get('/api/customers', function(data) {
+            customers = data;
+ 
+            // --- RESTORE STATE LOGIC ---
+            const lastCode = sessionStorage.getItem('metrics_short_code');
+            const lastDisplay = sessionStorage.getItem('metrics_cust_display');
+            const lastMonth = sessionStorage.getItem('metrics_month');
+ 
+            if (lastCode && lastDisplay && lastMonth) {
+                $('#custSearch').val(lastDisplay);
+                $('#selectedShortCode').val(lastCode);
+                $('#customer').val(lastCode);
+ 
+                loadMonths(lastCode, function() {
+                    // Restore Month text
+                    const opt = $(`#monthDropdown .custom-select-option[data-val="${lastMonth}"]`);
+                    if(opt.length) {
+                        $('#monthDisplay').val(opt.text());
+                        $('#monthSelect').val(lastMonth);
+                    }
+                    
+                    if ($('#monthSelect').val() === lastMonth) {
+                        $('#btnLoad').click();
+                    }
+                });
+            }
+            // ---------------------------
+        });
+ 
+        // ... Comment Input logic ...
+        $('#globalComment').on('input', function() {
+            const hasText = $(this).val().trim().length > 0;
+            $('#btnSave').prop('disabled', !hasText);
+        });
+ 
+        // 1. Customer Dropdown Logic (Searchable)
+        $('#custSearch').on('click input', function(e) {
+            e.stopPropagation();
+            const val = $(this).val().toLowerCase();
+            
+            // --- CLEAR DATA IF EMPTY ---
+            if ($(this).val().trim() === "") {
+                $('#selectedShortCode').val('');
+                $('#customer').val('');
+                resetMonthDropdown();
+
+                // Clear/Hide previously loaded details
+                $('#dashboardTitle').hide();
+                $('#metricsGrid').hide();
+                $('#bottomBar').hide();
+                $('#configSection').hide();
+            }
+            // ---------------------------
+
+            const list = $('#custDropdown');
+            list.empty();
+            const filtered = customers.filter(c => (c.display && c.display.toLowerCase().includes(val)));
+            if (filtered.length > 0) {
+                filtered.forEach(c => {
+                    list.append(`<div class="custom-select-option cust-opt" data-code="${c.short_code}" data-display="${c.display}">${c.display}</div>`);
+                });
+            } else {
+                list.append('<div class="custom-select-option disabled">No results</div>');
+            }
+            $('.custom-select-dropdown').not(list).removeClass('show');
+            list.addClass('show');
+        });
+
+        // 2. Month Dropdown Logic (Readonly Toggle)
+        $('#monthDisplay').on('click', function(e) {
+            e.stopPropagation();
+            // Only open if not disabled
+            if ($(this).prop('disabled')) return;
+
+            const dd = $('#monthDropdown');
+            $('.custom-select-dropdown').not(dd).removeClass('show');
+            dd.toggleClass('show');
+        });
+ 
+        // Option Click Handlers
+        $(document).on('mousedown', '.cust-opt', function(e) {
+            e.preventDefault(); e.stopPropagation();
+            const code = $(this).data('code');
+            const display = $(this).data('display');
+            $('#custSearch').val(display);
+            $('#selectedShortCode').val(code);
+            $('#customer').val(code);
+            $('#custDropdown').removeClass('show');
+            loadMonths(code); 
+        });
+
+        $(document).on('mousedown', '.month-opt', function(e) {
+            e.preventDefault(); e.stopPropagation();
+            const val = $(this).data('val');
+            const disp = $(this).data('disp');
+            $('#monthDisplay').val(disp);
+            $('#monthSelect').val(val);
+            $('#monthDropdown').removeClass('show');
+        });
+ 
+        // Close Dropdowns on outside click
+        $(document).on('click', function (e) {
+            if (!$(e.target).closest('.custom-select-wrapper').length) {
+                $('.custom-select-dropdown').removeClass('show');
+            }
+        });
+
+        // Attach Keyboard
+        attachKeyboardNav('custSearch', 'custDropdown');
+        attachKeyboardNav('monthDisplay', 'monthDropdown');
+ 
+        // 3. Load Button Logic
+        $('#btnLoad').click(function(e) {
+            e.preventDefault();
+           
+            currentShortCode = $('#selectedShortCode').val();
+            currentMonthValue = $('#monthSelect').val();
+            const currentMonthText = $('#monthDisplay').val(); 
+ 
+            // --- VALIDATION ---
+            if (!currentShortCode && !currentMonthValue) {
+                showAlert("Please select a Customer and a Month.");
+                return;
+            }
+            if (!currentShortCode) {
+                showAlert("Please select a Customer.");
+                return;
+            }
+            if (!currentMonthValue) {
+                showAlert("Please select a Month.");
+                return;
+            }
+            // ------------------
+ 
+            // --- SAVE STATE LOGIC ---
+            sessionStorage.setItem('metrics_short_code', currentShortCode);
+            sessionStorage.setItem('metrics_cust_display', $('#custSearch').val());
+            sessionStorage.setItem('metrics_month', currentMonthValue);
+            // ------------------------
+ 
+            $.post('/load_metrics', { short_code: currentShortCode, month: currentMonthValue }, function(res) {
+                if(!res.success) { showAlert(res.message); return; }
+               
+                const d = res.data;
+                const c = res.config;
+                let titleHtml = `${currentShortCode} : ${currentMonthText}`;
+                if (c.customer_note && c.customer_note !== 'None' && c.customer_note.trim() !== '') {
+                    titleHtml += ` <span style="color: #dc3545; font-size: 0.9em; margin-left: 15px; font-weight: 600;">${c.customer_note}</span>`;
+                }
+                $('#dashboardTitle').html(titleHtml).show();
+                $('#metricsGrid').css('display', 'grid');
+                $('#bottomBar').css('display', 'flex');
+ 
+                populateField('avail', (d.updated_availability * 100).toFixed(2), '%');
+                populateField('target', (d.updated_target * 100).toFixed(2), '%');
+                populateField('pl', d.updated_prod_limit); populateField('pu', d.updated_prod_used);
+                populateField('tl', d.updated_test_limit); populateField('tu', d.updated_test_used);
+                populateField('dl', d.updated_dev_limit);  populateField('du', d.updated_dev_used);
+                populateField('spt', d.updated_prod_target_storage_gb); populateField('spa', d.updated_prod_storage_gb);
+                populateField('stt', d.updated_test_target_storage_gb); populateField('sta', d.updated_test_storage_gb);
+                populateField('sdt', d.updated_dev_target_storage_gb);  populateField('sda', d.updated_dev_storage_gb);
+                populateField('to', d.updated_tickets_opened); populateField('tc', d.updated_tickets_closed);
+                populateField('tb', d.updated_tickets_current_backlog); populateField('tob', d.updated_tickets_overall_backlog);
+ 
+                if(c.no_of_environments == 3) $('.dev-row').show(); else $('.dev-row').hide();
+ 
+                $('#conf_fullname').val(c.customer_name);
+                $('#conf_prim').val(c.csm_primary);
+                $('#conf_lead').val(c.csm_lead);
+                let uidVal = c.customer_uid;
+                if(Array.isArray(uidVal)) uidVal = uidVal.join(', ');
+                $('#conf_uid').val(c.customer_uid ? c.customer_uid.join(', ') : '');
+                $('#conf_envs').val(c.no_of_environments);
+                $('#conf_months').val(c.no_of_months);
+                $('#conf_note').val(c.customer_note);
+ 
+                $('#view_conf_fullname').text(c.customer_name || '-');
+                $('#view_conf_prim').text(c.csm_primary || '-');
+                $('#view_conf_lead').text(c.csm_lead || '-');
+                $('#view_conf_uid').text(uidVal || '-');
+                $('#view_conf_envs').text(c.no_of_environments || '-');
+                $('#view_conf_months').text(c.no_of_months || '-');
+                $('#view_conf_note').text(c.customer_note || 'None');
+ 
+                cancelConfigEdit();
+            });
+        });
+    });
+   
+    function resetMonthDropdown() {
+        $('#monthSelect').val('');
+        $('#monthDisplay').val('').attr('placeholder', 'Select Customer First').prop('disabled', true);
+        $('#monthDropdown').empty();
+    }
+
+    // Helper: Load Months
+    function loadMonths(code, callback) {
+        const dd = $('#monthDropdown');
+        const disp = $('#monthDisplay');
+        
+        disp.attr('placeholder', 'Loading...').val('');
+       
+        $.get('/api/months/' + code, function(months) {
+            dd.empty();
+           
+            if (months.length === 0) {
+                disp.attr('placeholder', 'No data found');
+                dd.append('<div class="custom-select-option disabled">No data found</div>');
+            } else {
+                disp.attr('placeholder', '-- Select Month --');
+                months.forEach(m => {
+                    dd.append(`<div class="custom-select-option month-opt" data-val="${m.value}" data-disp="${m.display}">${m.display}</div>`);
+                });
+                disp.prop('disabled', false);
+            }
+ 
+            if (callback) callback();
+ 
+        }).fail(function() {
+            disp.attr('placeholder', 'Error loading months');
+        });
+    }
+ 
+    
+    // Helper: Populate View/Edit Fields
+    function populateField(idSuffix, val, append='') {
+        let displayVal = val;
+        // Simple check to remove trailing .00 for integers if desired, 
+        // or keep fixed(2) for availability
+        if (val !== null && !isNaN(val)) {
+            // Only strip if it's purely an integer masquerading as float, 
+            // BUT keep availability/currency decimals if needed. 
+            // For now, passing raw value to input, formatted to span.
+        }
+        if (val === null) displayVal = 0;
+        
+        $(`#view_${idSuffix}`).text(displayVal + append);
+        $(`#inp_${idSuffix}`).val(val);
+    }
+    
+    // --- Edit/Save/Cancel Logic ---
+    
+    let currentEditSection = null;
+    
+    // Replace your existing toggleEdit and cancelEdit functions with these:
+
+    async function toggleEdit(section) {
+        if (currentEditSection && currentEditSection !== section) {
+            const confirm = await showWarning("You have unsaved changes in another section. Discard them?");
+            if (!confirm) return; // User chose not to switch
+            cancelEdit(currentEditSection);
+        }
+        
+        currentEditSection = section;
+        const container = $(`#card-${section}`);
+        
+        // 1. Switch Metrics to Inputs
+        container.find('.view-mode').hide();
+        container.find('.inline-editor').show();
+        container.find('.edit-input').show(); // Ensure inputs show
+        
+        // 2. Button Swap: Hide "Edit" (Blue), Show "Cancel" (Red) inside the header
+        const editBtn = container.find('.btn-edit');
+        
+        // Create Cancel button if it doesn't exist yet, or toggle it
+        if(container.find('.btn-cancel-mode').length === 0) {
+            // Insert Red Cancel Button
+            editBtn.after(`<button class="btn btn-danger btn-cancel-mode" onclick="cancelEdit('${section}')">Cancel</button>`);
+        } else {
+            container.find('.btn-cancel-mode').show();
+        }
+        editBtn.hide(); // Hide the blue edit button
+
+        // 3. Show the Comment/Save Panel below grids
+        $('#globalCommentWrapper').slideDown();
+        $('#globalComment').val('').focus();
+        $('#btnSave').prop('disabled', true);   
+    }
+
+    function cancelEdit(sectionName) {
+        const sec = sectionName || currentEditSection;
+        if(!sec) return;
+
+        const container = $(`#card-${sec}`);
+        
+        // 1. Revert UI
+        container.find('.view-mode').show();
+        container.find('.inline-editor').hide();
+        
+        // 2. Button Swap: Show "Edit", Hide "Cancel"
+        container.find('.btn-edit').show();
+        container.find('.btn-cancel-mode').hide();
+        
+        // 3. Hide Comment Panel
+        $('#globalCommentWrapper').slideUp();
+        currentEditSection = null;
+    }
+    
+    async function performSave() {
+        // 1. Validation
+
+        let original_data = {};
+        let changed_data = {};
+
+        const comment = $('#globalComment').val().trim();
+        if (!comment) {
+            showAlert("\nPlease enter a reason for the change in the comment box.\n\n");
+            return;
+        }
+
+        if (!currentEditSection) {
+            showAlert("\nNo section selected for editing.\n\n");
+            return;
+        }
+
+        let url = "";
+        // Initialize data object
+        let data = {
+            short_code: currentShortCode,
+            month: currentMonthValue,
+            comment: comment
+        };
+
+        // 2. Data Collection (Fixed IDs to match HTML)
+        
+        // --- AVAILABILITY ---
+        if (currentEditSection === 'availability') {
+            url = '/save_availability';
+
+            const originalavail = parseFloat($('#view_avail').text());
+            const originaltarget = parseFloat($('#view_target').text());
+
+            const availVal = parseFloat($('#inp_avail').val());
+            const targetVal = parseFloat($('#inp_target').val());
+
+            if (isNaN(availVal) || isNaN(targetVal)) {
+                showAlert("\nAvailability and Target must be valid numbers.\n\n");
+                return;
+            }
+
+            // CRITICAL VALIDATION
+            if (availVal < 0 || availVal > 100) {
+                showAlert("\nAvailability must be less than or equal to 100%.\n\n");
+                return; // ⛔ STOP SAVE
+            }
+
+            if (targetVal < 0 || targetVal > 100) {
+                showAlert("\nTarget must be less than or equal to 100%.\n\n");
+                return; // ⛔ STOP SAVE
+            }
+
+            if (availVal === originalavail && targetVal === originaltarget) {
+                showAlert("\nNo changes detected in Availability or Target.\n\n");
+                return; // ⛔ STOP SAVE
+            }
+
+            data.availability = availVal;
+            data.target = targetVal;
+        }
+
+        // --- USERS ---
+        else if (currentEditSection === 'users') {
+            url = '/save_users';
+
+            original_data = {
+                prod_limit: parseInt($('#view_pl').text()),
+                prod_used: parseInt($('#view_pu').text()),
+                test_limit: parseInt($('#view_tl').text()),
+                test_used: parseInt($('#view_tu').text()),
+                dev_limit: parseInt($('#view_dl').text()) || 0,
+                dev_used: parseInt($('#view_du').text()) || 0
+            };
+
+            changed_data = {
+                prod_limit: parseInt($('#inp_pl').val()),
+                prod_used: parseInt($('#inp_pu').val()),
+                test_limit: parseInt($('#inp_tl').val()),
+                test_used: parseInt($('#inp_tu').val()),
+                dev_limit: parseInt($('#inp_dl').val()) || 0,
+                dev_used: parseInt($('#inp_du').val()) || 0
+            };
+
+            if(!changeddata(original_data, changed_data)) {
+                showAlert("\nNo changes detected in Users section.\n\n");
+                return; // ⛔ STOP SAVE
+            }
+
+            // WARNING VALIDATION
+            if (changed_data.prod_used > changed_data.prod_limit) {
+                const confirmed = await showWarning("\nProduction consumed exceeds Production entitlement. Continue?\n\n");
+                if (!confirmed) return; // ⛔ STOP SAVE
+            }
+
+            if (changed_data.test_used > changed_data.test_limit) {
+                const confirmed = await showWarning("\nTest consumed exceeds Test entitlement. Continue?\n\n");
+                if (!confirmed) return; // ⛔ STOP SAVE
+            }
+
+            if (changed_data.dev_used > changed_data.dev_limit) {
+                const confirmed = await showWarning("\nDev consumed exceeds Dev entitlement. Continue?\n\n");
+                if (!confirmed) return; // ⛔ STOP SAVE
+            }
+
+            // Fixed IDs: inp_p_lim instead of inp_pl
+            data.prod_limit = $('#inp_pl').val(); 
+            data.prod_used  = $('#inp_pu').val();
+            data.test_limit = $('#inp_tl').val(); 
+            data.test_used  = $('#inp_tu').val();
+            data.dev_limit  = $('#inp_dl').val() || 0; 
+            data.dev_used   = $('#inp_du').val() || 0;
+        } 
+        // --- STORAGE ---
+        else if (currentEditSection === 'storage') {
+            url = '/save_storage';
+
+            original_data = {
+                prod_target: parseInt($('#view_spt').text()),
+                prod_actual: parseInt($('#view_spa').text()),
+                test_target: parseInt($('#view_stt').text()),
+                test_actual: parseInt($('#view_sta').text()),
+                dev_target: parseInt($('#view_sdt').text()) || 0,
+                dev_actual: parseInt($('#view_sda').text()) || 0
+            };
+
+            changed_data = {
+                prod_target: parseInt($('#inp_spt').val()),
+                prod_actual: parseInt($('#inp_spa').val()),
+                test_target: parseInt($('#inp_stt').val()),
+                test_actual: parseInt($('#inp_sta').val()),
+                dev_target: parseInt($('#inp_sdt').val()) || 0,
+                dev_actual: parseInt($('#inp_sda').val()) || 0
+            };
+
+            if(!changeddata(original_data, changed_data)) {
+                showAlert("\nNo changes detected in Storage section.\n\n");
+                return; // ⛔ STOP SAVE
+            }
+
+            // WARNING VALIDATION
+            if (changed_data.prod_actual > changed_data.prod_target) {
+                const confirmed = await showWarning("\nProduction Storage Used exceeds Production Storage Target. Continue?\n\n");
+                if (!confirmed) return; // ⛔ STOP SAVE
+            }
+
+            if (changed_data.test_actual > changed_data.test_target) {
+                const confirmed = await showWarning("\nTest Storage Used exceeds Test Storage Target. Continue?\n\n");
+                if (!confirmed) return; // ⛔ STOP SAVE
+            }
+
+            if (changed_data.dev_actual > changed_data.dev_target) {
+                const confirmed = await showWarning("\nDev Storage Used exceeds Dev Storage Target. Continue?\n\n");
+                if (!confirmed) return; // ⛔ STOP SAVE
+            }
+
+            // Fixed IDs: inp_sp_tgt instead of inp_spt
+            data.prod_target = $('#inp_spt').val(); 
+            data.prod_actual = $('#inp_spa').val();
+            data.test_target = $('#inp_stt').val(); 
+            data.test_actual = $('#inp_sta').val();
+            data.dev_target  = $('#inp_sdt').val() || 0; 
+            data.dev_actual  = $('#inp_sda').val() || 0;
+        } 
+        // --- TICKETS ---
+        else if (currentEditSection === 'tickets') {
+            url = '/save_tickets';
+
+            original_data = {
+                opened: parseInt($('#view_to').text()),
+                closed: parseInt($('#view_tc').text()),
+                current_backlog: parseInt($('#view_tb').text()),
+                overall_backlog: parseInt($('#view_tob').text())
+            };
+
+            changed_data = {
+                opened: parseInt($('#inp_to').val()),
+                closed: parseInt($('#inp_tc').val()),
+                current_backlog: parseInt($('#inp_tb').val()),
+                overall_backlog: parseInt($('#inp_tob').val())
+            };
+
+            if(!changeddata(original_data, changed_data)) {
+                showAlert("\nNo changes detected in Tickets section.\n\n");
+                return; // ⛔ STOP SAVE
+            }
+
+            // Fixed IDs: inp_t_open instead of inp_to
+            data.opened          = $('#inp_to').val(); 
+            data.closed          = $('#inp_tc').val();
+            data.current_backlog = $('#inp_tb').val(); 
+            data.overall_backlog = $('#inp_tob').val();
+        }
+
+        // 3. Send Request
+        // Disable button to prevent double-click
+        $('#btnSave').prop('disabled', true).text('Saving...');
+
+        $.post(url, data, function(res) {
+            if(res.success) {
+                showAlert("\nSaved Successfully\n\n");
+                // Reload data to reflect changes
+                $('#btnLoad').click(); 
+                // Close edit mode
+                cancelEdit();
+            } else {
+                showAlert(res.message);
+            }
+        })
+        .fail(function() {
+            showAlert("\nServer Error: Could not save changes.\n\n");
+        })
+        .always(function() {
+            // Re-enable button
+            $('#btnSave').prop('disabled', false).text('Save Changes');
+        });
+    }
+
+    function changeddata(original, updated) {
+        for (const key in original) {
+            if (original[key] !== updated[key]) {
+                return true; // Data has changed
+            }
+        }
+        return false; // No changes detected
+    }
+    
+    function generatePPT() {
+        if (!currentShortCode || !currentMonthValue) {
+            // Validation check
+            return; 
+        }
+
+        $.post('/generate_ppt', { short_code: currentShortCode, month: currentMonthValue }, function(res) {
+            // Placeholder logic
+        });
+
+        // --- USE THIS FETCH BLOCK FOR FILE DOWNLOADS ---
+        fetch('/generate_ppt', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+                'customer': currentShortCode,
+                'month': currentMonthValue
+            })
+        })
+        .then(response => {
+            if (!response.ok) throw new Error("Generation failed");
+            return response.blob();
+        })
+        .then(blob => {
+            // 1. Create a Date object from the YYYY-MM-DD string
+            const dateObj = new Date(currentMonthValue);
+            
+            // 2. Extract Year and Short Month (e.g., 'Jun', 'Nov')
+            const year = dateObj.getFullYear();
+            const monthShort = dateObj.toLocaleString('en-US', { month: 'short' });
+            
+            // 3. Construct the filename: "AGDC-2025-Jun.pptx"
+            const filename = `${currentShortCode}-${year}-${monthShort}.pptx`;
+
+            // 4. Trigger Download
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename; // <--- This overrides whatever the server sent
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            a.remove();
+        })
+        .catch(err => console.error(err));
+    }
+    
+    function toggleConfig() {
+        $('#configSection').slideToggle();
+        // Scroll to bottom if opening
+        if (!$('#configSection').is(':visible')) {
+            $('html, body').animate({ scrollTop: $(document).height() }, 'slow');
+        }
+    }
+
+    function saveConfig() {
+        const note = $('#conf_note').val() || '';
+
+        if (note.length > 125) {
+            showAlert("\nCustomer note cannot exceed 125 characters.\n\n");
+            return; // ⛔ STOP SAVE
+        }
+
+        const comment = $('#conf_comment').val().trim();
+        if(!comment) { showAlert("\nPlease enter a reason for the configuration change.\n\n"); return; }
+
+        const original_data = {
+            customer_name: $('#view_conf_fullname').text(),
+            csm_primary: $('#view_conf_prim').text(),
+            csm_lead: $('#view_conf_lead').text(),
+            customer_uid: $('#view_conf_uid').text(),
+            no_of_environments: parseInt($('#view_conf_envs').text()),
+            no_of_months: parseInt($('#view_conf_months').text()),
+            customer_note: $('#view_conf_note').text()
+        };
+
+        const changed_data = {
+            customer_name: $('#conf_fullname').val(),
+            csm_primary: $('#conf_prim').val(),
+            csm_lead: $('#conf_lead').val(),
+            customer_uid: $('#conf_uid').val() || original_data.customer_uid,
+            no_of_environments: parseInt($('#conf_envs').val()),
+            no_of_months: parseInt($('#conf_months').val()),
+            customer_note: $('#conf_note').val() || original_data.customer_note
+        };
+
+        if(!changeddata(original_data, changed_data)) {
+            showAlert("\nNo changes detected in Configuration.\n\n");
+            return; // ⛔ STOP SAVE
+        }
+
+        const data = {
+            short_code: currentShortCode,
+            customer_name: $('#conf_fullname').val(),
+            csm_primary: $('#conf_prim').val(),
+            csm_lead: $('#conf_lead').val(),
+            customer_uid: $('#conf_uid').val(),
+            no_of_environments: $('#conf_envs').val(),
+            no_of_months: $('#conf_months').val(),
+            customer_note: $('#conf_note').val(),
+            comment: comment
+        };
+
+        if(!changeddata(original_data, data)) {
+            showAlert("\nNo changes detected in Configuration.\n\n");
+            return; // ⛔ STOP SAVE
+        }
+
+        $.post('/save_config', data, function(res) {
+            if(res.success) {
+                showAlert("\nConfiguration Saved Successfully\n\n");
+                $('#configSection').slideUp();
+                $('#conf_comment').val(''); // Clear comment
+                // Reload to reflect env changes (e.g. 2 vs 3)
+                $('#btnLoad').click(); 
+            } else {
+                showAlert(res.message);
+            }
+        });
+        if ($('#conf_note').val().length > 125) {
+            showAlert("\nCustomer note cannot exceed 125 characters.\n\n");
+            return;
+        }
+
+    }
+
+    // --- Config View/Edit Logic ---
+
+    function toggleConfigEditMode() {
+        // Show Edit inputs, Hide View spans
+        $('#configViewMode').hide();
+        $('#configEditMode').css('display', 'grid'); // Restore grid layout
+        
+        // Toggle Notes
+        $('#view_note_container').hide();
+        $('#edit_note_container').show();
+
+        // Show Footer (Comment/Save)
+        $('#configFooter').show();
+
+        // Toggle Header Buttons
+        $('#btnConfigEdit').hide();
+        $('#btnConfigCancel').show();
+    }
+
+    function cancelConfigEdit() {
+        // Revert everything
+        $('#configViewMode').css('display', 'grid');
+        $('#configEditMode').hide();
+
+        $('#view_note_container').show();
+        $('#edit_note_container').hide();
+
+        $('#configFooter').hide();
+
+        $('#btnConfigEdit').show();
+        $('#btnConfigCancel').hide();
+        
+        // Clear comment
+        $('#conf_comment').val('');
+    }
+
+    $('#conf_comment, #conf_note').on('input', function () {
+        const commentOk = $('#conf_comment').val().trim() !== '';
+        const noteLen = ($('#conf_note').val() || '').length;
+
+        const valid = commentOk && noteLen <= 125;
+        $('#btnConfigSave').prop('disabled', !valid);
+    });
+
+
+    function saveMetricsState(data, config) {
+        const state = {
+            customer: $('#selectedShortCode').val(),
+            customerDisplay: $('#custSearch').val(),
+            month: $('#monthSelect').val(),
+            data: data,
+            config: config
+        };
+        sessionStorage.setItem('metrics_state', JSON.stringify(state));
+    }
+
+    function restoreMetricsState() {
+        const saved = sessionStorage.getItem('metrics_state');
+        if (!saved) return;
+
+        const state = JSON.parse(saved);
+        if (!state.customer || !state.month) return;
+
+        // Restore Inputs
+        $('#custSearch').val(state.customerDisplay);
+        $('#selectedShortCode').val(state.customer);
+        
+        // We need to re-populate the month dropdown first
+        // Note: We reuse the selectCust logic but manually trigger the load
+        loadMonths(state.customer);
+
+        // Wait slightly for months to load (or modify loadMonths to take a callback)
+        // For simplicity here, we assume the user just wants the data visible:
+        
+        // Trigger the load logic directly with saved data
+        // (This avoids a network call if you want, but calling the network ensures fresh data)
+        // Let's reuse the button click logic to keep it simple, but we need to set the month val first.
+        
+        setTimeout(() => {
+            $('#monthSelect').val(state.month);
+            // Update style after setting value
+            updateSelectPlaceholder('#monthSelect');
+            $('#btnLoad').click(); 
+        }, 500); // Small delay to ensure month dropdown is populated
+    }
+
+    function enableKeyboardDropdown(inputId, dropdownId, onSelect) {
+    let activeIndex = -1;
+
+    const input = document.getElementById(inputId);
+    const dropdown = document.getElementById(dropdownId);
+
+    input.addEventListener('keydown', function (e) {
+        const options = dropdown.querySelectorAll('.custom-select-option');
+        if (!options.length) return;
+
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            activeIndex = (activeIndex + 1) % options.length;
+        } 
+        else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            activeIndex = (activeIndex - 1 + options.length) % options.length;
+        } 
+        else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (activeIndex >= 0) options[activeIndex].click();
+            return;
+        }
+
+        options.forEach(o => o.classList.remove('active'));
+        if (activeIndex >= 0) {
+            options[activeIndex].classList.add('active');
+            options[activeIndex].scrollIntoView({ block: 'nearest' });
+        }
+    });
+
+    dropdown.addEventListener('mouseover', () => activeIndex = -1);
+}
+
+
+    </script>
+{% endblock %}
