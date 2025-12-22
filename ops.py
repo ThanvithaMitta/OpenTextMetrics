@@ -6,6 +6,9 @@ import datetime
 import uuid
 import os
 import csv
+from io import StringIO, BytesIO
+from datetime import datetime, timedelta
+from flask import send_file, jsonify
 
 class DbOperations:
     def __init__(self, db_config):
@@ -686,11 +689,6 @@ class DbOperations:
             conn.close() 
  
     def dt_download_csv(self, args, username):
-        import csv
-        from io import StringIO, BytesIO
-        from datetime import datetime, timedelta
-        from flask import send_file, jsonify
-
         selected_date = args.get('date')
         from_date = args.get('from')
         to_date = args.get('to')
@@ -805,11 +803,8 @@ class DbOperations:
 
         except Exception as e:
             return jsonify({'success': False, 'message': str(e)}), 500
-
-
-     # =========================================================================
+            
     # NEW METHODS FOR ACCESS LOGGING
-    # =========================================================================
     
     def log_access_db(self, user_info):
         """
