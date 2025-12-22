@@ -7,12 +7,8 @@ import json
 import getpass
 import psycopg2
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 import uuid
-#from access_logger import log_site_access
-# # =========================
-# # DAILY TRACKER APIs
-# # =========================
 from psycopg2.extras import RealDictCursor
 # Placeholder import for your existing PPT logic
 try:
@@ -40,8 +36,6 @@ def get_user_identity():
     1. Checks Flask Session (persists across tabs).
     2. Fallback: Uses nslookup on client IP to get system name.
     """
-    # [SECURITY UPDATE] Removed request.args check so users cannot type ?username=X in URL
-    # Login is now handled explicitly in the index() route via POST
     
     # 1. Retrieve from session
     username = session.get('username')
@@ -70,7 +64,6 @@ def get_user_identity():
         'ip_address' : ip
     }
  
- 
 # --- Template Filter ---
 @app.template_filter('normalize_number')
 def normalize_number(value):
@@ -78,28 +71,19 @@ def normalize_number(value):
     return DbOperations.fmt_num(value)
 
 # --- Routes ---
-
 @app.route('/', methods=['GET', 'POST'])
 def index():
     if request.method == 'POST':
-        # Get username from the hidden form
         form_username = request.form.get('username')
         if form_username:
             session['username'] = form_username
-            # Redirect to self (GET) to clear the browser history of the POST
-            # This ensures the URL bar stays clean (e.g., http://10.193.96.41:5000/)
-            
             return redirect(url_for('index'))
-
-    # Standard Page Load (GET)
+            
     user = get_user_identity()
 
     if request.method == 'GET':
-        
         db = DbOperations(DB_CONFIG)
         db.log_access_db(user)
-
-        #log_site_access(user)
 
     return render_template('metrics.html', user=user)
 
@@ -108,7 +92,6 @@ def reporting():
     user = get_user_identity()
     return render_template('reporting.html', user=user)
 
-# --- NEW: Download Access Logs (Hidden Admin Route) ---
 @app.route('/download_access_logs')
 def download_access_logs():
     db = DbOperations(DB_CONFIG)
@@ -169,8 +152,6 @@ def build_audit_info(req):
 def save_availability():
     try:
         db = DbOperations(DB_CONFIG)
-        # Availability is stored as decimal 0.99 in DB, UI sends 99.00
-        # Divide by 100 before saving
         avail = float(request.form.get('availability', 0)) / 100.0
         target = float(request.form.get('target', 0)) / 100.0
         
@@ -248,7 +229,6 @@ def save_config():
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)})
-
 
 # --- API: Reporting Page ---
 @app.route('/api/reporting/csm_list')
@@ -353,8 +333,6 @@ def generate_ppt_route():
         if not customer or not month:
             return jsonify({'success': False, 'message': 'Missing customer or month'}), 400
 
-        # Create DB connection
-        # Use DB_CONFIG credentials directly or specific PPT user
         conn = psycopg2.connect(**DB_CONFIG)
         
         try:
@@ -371,39 +349,26 @@ def generate_ppt_route():
             dt_obj = datetime.strptime(month, '%Y-%m-%d')
             year_str = dt_obj.strftime('%Y')
             month_str = dt_obj.strftime('%b')
-            # Use short_code and month for filename
             output_filename = f"{customer}-{year_str}-{month_str}.pptx"
             generate_presentation(data_dict, output_filename)
             
             # 4. Send File
-            # Use send_file with as_attachment=True
             return_data = send_file(output_filename, as_attachment=True, download_name=output_filename)
-            
-            # (Optional) Clean up file after sending is tricky in Flask without after_request hooks
-            # but for low volume, overwriting same file is okay or use tempfile
-            
             return return_data
             
         finally:
             conn.close()
-            # Clean up file if it exists
             if 'output_filename' in locals() and os.path.exists(output_filename):
-                # Small delay or separate cleanup might be needed, 
-                # but sending file usually locks it until stream starts.
-                # Ideally use: io.BytesIO buffer if generate_presentation supports it.
                 pass 
 
     except Exception as e:
-        print(f"PPT Error: {str(e)}") # Log it
+        print(f"PPT Error: {str(e)}") 
         return jsonify({'success': False, 'message': f"Server Error: {str(e)}"}), 500
-
-
+        
 @app.route('/daily_tracker')
 def daily_tracker():
     user = get_user_identity()
     db = DbOperations(DB_CONFIG)
-
-    # customers_list (short_code + full name)
     customers = db.get_customers()
     customers_list = [{
         "name": c["short_code"],
@@ -423,8 +388,7 @@ def daily_tracker():
             tasks_list = [r[0] for r in cur.fetchall()]
     finally:
         conn.close()
-
-    from datetime import date, timedelta
+        
     today = date.today()
     min_entry_date = (today - timedelta(days=365)).isoformat()
     max_entry_date = today.isoformat()
@@ -446,7 +410,6 @@ def daily_tracker_fetch_entries():
     db = DbOperations(DB_CONFIG)
     return jsonify({'results': db.dt_fetch_entries(date, username)})
 
-
 @app.route('/daily_tracker/aggregates')
 def daily_tracker_aggregates():
     date = request.args.get('date')
@@ -459,8 +422,6 @@ def daily_tracker_aggregates():
     db = DbOperations(DB_CONFIG)
     return jsonify({'rows': db.dt_aggregates(date, username)})
 
-
-
 @app.route('/daily_tracker/add', methods=['POST'])
 def daily_tracker_add():
     payload = request.get_json() or {}
@@ -468,13 +429,11 @@ def daily_tracker_add():
     audit = build_audit_info(request)
     return jsonify(db.dt_add_entry(payload, audit))
 
-
 @app.route('/daily_tracker/delete', methods=['POST'])
 def daily_tracker_delete():
     ids = (request.json or {}).get('ids', [])
     db = DbOperations(DB_CONFIG)
     return jsonify(db.dt_delete(ids))
-
 
 @app.route('/daily_tracker/copy', methods=['POST'])
 def daily_tracker_copy():
@@ -482,20 +441,15 @@ def daily_tracker_copy():
     db = DbOperations(DB_CONFIG)
     return jsonify(db.dt_copy(payload))
 
-
 @app.route('/daily_tracker/download_csv')
 def daily_tracker_download_csv():
     args = request.args
     user = get_user_identity()
     username = user.get('username')
-
     if not username:
         return jsonify({'success': False, 'message': 'User not identified'}), 401
-
     db = DbOperations(DB_CONFIG)
     return db.dt_download_csv(args, username)
-
-
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
