@@ -113,7 +113,7 @@ def api_customers():
     db = DbOperations(DB_CONFIG)
     return jsonify(db.get_customers())
 
-@app.route('/api/months/<short_code>')
+@app.route('/api/months/<path:short_code>')
 def api_months(short_code):
     db = DbOperations(DB_CONFIG)
     return jsonify(db.get_months(short_code))
